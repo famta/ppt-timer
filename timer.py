@@ -20,52 +20,62 @@ class ProfessionalTimer:
         self.root.attributes("-alpha", self.bg_alpha)
         self.root.config(bg="black")
 
-        # 메인 컨테이너
-        self.container = tk.Frame(self.root, bg="black")
-        self.container.pack()
-
-        # 숫자 라벨
-        self.label = tk.Label(self.container, text="", font=("Helvetica", self.font_size, "bold"), 
+        # 숫자 라벨 (전체 창)
+        self.label = tk.Label(self.root, text="", font=("Helvetica", self.font_size, "bold"), 
                               fg=self.font_color, bg="black", cursor="fleur", padx=15, pady=10)
-        self.label.grid(row=0, column=0)
-
-        # 조절 패널 (마우스 오버 시만 노출)
-        self.side_panel = tk.Frame(self.container, bg="black")
-        
-        # 1. 투명도 슬라이더 (T)
-        tk.Label(self.side_panel, text="T", font=("Arial", 7), bg="black", fg="gray").pack()
-        self.alpha_scale = tk.Scale(self.side_panel, from_=1.0, to=0.1, resolution=0.05,
-                                    orient="vertical", showvalue=0, command=self.update_alpha,
-                                    bg="#333", fg="white", highlightthickness=0, width=6, length=40)
-        self.alpha_scale.set(self.bg_alpha)
-        self.alpha_scale.pack(pady=(0, 5))
-
-        # 2. 글자 크기 슬라이더 (S)
-        tk.Label(self.side_panel, text="S", font=("Arial", 7), bg="black", fg="gray").pack()
-        self.size_scale = tk.Scale(self.side_panel, from_=150, to=20, resolution=1,
-                                   orient="vertical", showvalue=0, command=self.update_font_size,
-                                   bg="#333", fg="white", highlightthickness=0, width=6, length=40)
-        self.size_scale.set(self.font_size)
-        self.size_scale.pack()
+        self.label.pack()
 
         # 마우스 이벤트
         self.label.bind("<ButtonPress-1>", self.start_move)
         self.label.bind("<B1-Motion>", self.do_move)
         self.label.bind("<Double-Button-1>", self.toggle_timer)
         
-        # 마우스 오버 시 사이드 패널 노출/숨김
-        self.root.bind("<Enter>", lambda e: self.side_panel.grid(row=0, column=1, padx=(0, 5)))
-        self.root.bind("<Leave>", lambda e: self.side_panel.grid_forget())
-
-        # 우클릭 메뉴 (종료 및 색상)
-        self.menu = tk.Menu(self.root, tearoff=0)
-        self.menu.add_command(label="🎨 글자 색상 변경", command=self.choose_color)
-        self.menu.add_command(label="⏱️ 시간 다시 설정", command=self.ask_time)
-        self.menu.add_separator()
-        self.menu.add_command(label="종료 (Exit)", command=self.root.destroy)
-        self.label.bind("<Button-3>", lambda e: self.menu.post(e.x_root, e.y_root))
+        # 우클릭 시 설정창(Toplevel) 띄우기
+        self.label.bind("<Button-3>", self.show_settings)
 
         self.update_timer()
+
+    def show_settings(self, event):
+        # 이미 설정창이 열려있으면 닫기
+        if hasattr(self, 'settings') and self.settings.winfo_exists():
+            self.settings.destroy()
+
+        self.settings = tk.Toplevel(self.root)
+        self.settings.title("Settings")
+        self.settings.geometry(f"+{event.x_root}+{event.y_root}")
+        self.settings.attributes("-topmost", True)
+        self.settings.config(bg="#222", padx=10, pady=10)
+        
+        # 테두리 없는 미니 설정창
+        self.settings.overrideredirect(True)
+
+        # 1. 투명도 슬라이더
+        tk.Label(self.settings, text="배경 투명도", bg="#222", fg="white", font=("Arial", 9)).pack()
+        alpha_scale = tk.Scale(self.settings, from_=0.1, to=1.0, resolution=0.05,
+                               orient="horizontal", command=self.update_alpha,
+                               bg="#222", fg="white", highlightthickness=0)
+        alpha_scale.set(self.bg_alpha)
+        alpha_scale.pack(fill="x", pady=(0, 10))
+
+        # 2. 글자 크기 슬라이더
+        tk.Label(self.settings, text="글자 크기", bg="#222", fg="white", font=("Arial", 9)).pack()
+        size_scale = tk.Scale(self.settings, from_=20, to=200, resolution=1,
+                              orient="horizontal", command=self.update_font_size,
+                              bg="#222", fg="white", highlightthickness=0)
+        size_scale.set(self.font_size)
+        size_scale.pack(fill="x", pady=(0, 10))
+
+        # 3. 기타 버튼들
+        btn_frame = tk.Frame(self.settings, bg="#222")
+        btn_frame.pack(fill="x")
+        
+        tk.Button(btn_frame, text="🎨 색상", command=self.choose_color, bg="#444", fg="white", bd=0).pack(side="left", expand=True, fill="x", padx=2)
+        tk.Button(btn_frame, text="⏱️ 시간", command=self.ask_time, bg="#444", fg="white", bd=0).pack(side="left", expand=True, fill="x", padx=2)
+        
+        tk.Button(self.settings, text="닫기 / 종료", command=self.root.destroy, bg="red", fg="white", bd=0).pack(fill="x", pady=(10, 0))
+
+        # 설정창 바깥 클릭 시 닫기
+        self.settings.bind("<FocusOut>", lambda e: self.settings.destroy())
 
     def update_alpha(self, val):
         self.bg_alpha = float(val)
@@ -88,7 +98,6 @@ class ProfessionalTimer:
                 h, m, s = map(int, input_time.split(':'))
                 self.remaining = h * 3600 + m * 60 + s
             except: pass
-        elif not hasattr(self, 'remaining'): self.root.destroy()
 
     def start_move(self, event):
         self.x, self.y = event.x, event.y
