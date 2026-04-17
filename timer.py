@@ -2,17 +2,17 @@ import tkinter as tk
 from tkinter import simpledialog, colorchooser
 import sys
 
-class BulletproofTimer:
+class PerfectBlueTimer:
     def __init__(self, root):
         self.root = root
         
         # 1. 제어 변수
-        self.after_id = None  # 중복 실행 방지용 핵심 추적기
+        self.after_id = None
         self.initial_seconds = 600 
         self.remaining = 600
         self.font_size = 60
         self.font_color = "#0000FF" 
-        self.fg_alpha = 1.0
+        self.fg_alpha = 1.0  # 초기 투명도 100%
         self.running = True
         self.time_str = "00:10:00"
 
@@ -29,6 +29,7 @@ class BulletproofTimer:
         self.root.config(bg=self.transparent_key)
         self.root.wm_attributes("-transparentcolor", self.transparent_key)
         
+        # 작업 표시줄 아이콘 표시 (윈도우 전용)
         self.root.after(10, lambda: self.set_appwindow(self.root))
 
         # 3. 레이아웃
@@ -43,14 +44,15 @@ class BulletproofTimer:
                                    fg="white", bg=self.transparent_key)
         self.pause_icon.place_forget()
 
+        # 이벤트 바인딩
         for w in [self.label, self.main_frame, self.pause_icon]:
             w.bind("<ButtonPress-1>", self.start_move)
             w.bind("<B1-Motion>", self.do_move)
             w.bind("<Double-Button-1>", self.toggle_timer)
             w.bind("<Button-3>", self.show_settings)
 
-        self.start_timer_loop() # 최초 실행
-        self.apply_alpha()
+        self.start_timer_loop()
+        self.apply_alpha() # 초기 투명도 적용
         self.resize_window()
 
     def set_appwindow(self, root):
@@ -63,6 +65,7 @@ class BulletproofTimer:
         root.after(10, root.deiconify)
 
     def apply_alpha(self):
+        """실제 글자 투명도 조절 (윈도우 알파값 제어)"""
         self.root.attributes("-alpha", self.fg_alpha)
 
     def show_settings(self, event):
@@ -80,33 +83,28 @@ class BulletproofTimer:
         tk.Label(header, text="TIMER SETTINGS", bg="#1a1a1a", fg="white", font=("Arial", 9, "bold")).pack(side="left")
         tk.Button(header, text="✕", command=self.settings.destroy, bg="#1a1a1a", fg="white", bd=0, padx=5).pack(side="right")
 
-        tk.Scale(self.settings, from_=0.1, to=1.0, resolution=0.05, orient="horizontal", label="투명도",
-                 command=self.set_fg_alpha, bg="#1a1a1a", fg="white", highlightthickness=0).set(self.fg_alpha)
+        # [복구] 투명도 슬라이더 - command를 확실히 연결
+        tk.Label(self.settings, text="글자 투명도 (T2)", bg="#1a1a1a", fg="#aaa", font=("Arial", 8)).pack(anchor="w")
+        sc_alpha = tk.Scale(self.settings, from_=0.1, to=1.0, resolution=0.05, orient="horizontal",
+                            command=self.set_fg_alpha, bg="#1a1a1a", fg="white", highlightthickness=0)
+        sc_alpha.set(self.fg_alpha)
+        sc_alpha.pack(fill="x", pady=(0, 10))
 
-        tk.Scale(self.settings, from_=20, to=300, orient="horizontal", label="크기",
-                 command=self.set_font_size, bg="#1a1a1a", fg="white", highlightthickness=0).set(self.font_size)
+        # 크기 슬라이더
+        tk.Label(self.settings, text="글자 크기", bg="#1a1a1a", fg="#aaa", font=("Arial", 8)).pack(anchor="w")
+        sc_size = tk.Scale(self.settings, from_=20, to=300, orient="horizontal",
+                           command=self.set_font_size, bg="#1a1a1a", fg="white", highlightthickness=0)
+        sc_size.set(self.font_size)
+        sc_size.pack(fill="x", pady=(0, 15))
 
-        tk.Button(self.settings, text="🔄 시간 초기화 (Reset)", command=self.reset_timer, bg="#0056b3", fg="white", bd=0, pady=8).pack(fill="x", pady=(15, 2))
+        # 버튼들
+        tk.Button(self.settings, text="🔄 시간 초기화 (Reset)", command=self.reset_timer, bg="#0056b3", fg="white", bd=0, pady=8).pack(fill="x", pady=(5, 2))
         tk.Button(self.settings, text="🎨 색상 변경", command=self.choose_color, bg="#333", fg="white", bd=0, pady=5).pack(fill="x", pady=2)
         tk.Button(self.settings, text="⏱️ 시간 재설정", command=self.ask_time, bg="#333", fg="white", bd=0, pady=5).pack(fill="x", pady=2)
         tk.Button(self.settings, text="🛑 프로그램 종료", command=self.exit_app, bg="#8b0000", fg="white", bd=0, pady=7).pack(fill="x", pady=(10, 0))
 
-    def start_timer_loop(self):
-        """기존 루프를 취소하고 새로 시작하여 중복 실행을 원천 차단"""
-        if self.after_id:
-            self.root.after_cancel(self.after_id)
-        self.update_timer()
-
-    def reset_timer(self):
-        self.remaining = self.initial_seconds
-        self.update_display()
-        # 일시정지 상태라면 다시 시작하지 않음
-        if self.running:
-            self.start_timer_loop()
-        if hasattr(self, 'settings'):
-            self.settings.destroy()
-
     def set_fg_alpha(self, val):
+        """슬라이더에서 값을 받아 즉시 반영"""
         self.fg_alpha = float(val)
         self.apply_alpha()
 
@@ -116,10 +114,18 @@ class BulletproofTimer:
         self.pause_icon.config(font=("Helvetica", int(self.font_size*1.5), "bold"))
         self.resize_window()
 
+    def reset_timer(self):
+        self.remaining = self.initial_seconds
+        self.update_display()
+        if self.running:
+            self.start_timer_loop()
+        if hasattr(self, 'settings'):
+            self.settings.destroy()
+
     def resize_window(self):
         text = self.label.cget("text")
         char_count = len(text)
-        new_width = int(self.font_size * char_count * 0.8) # 넉넉하게 0.8
+        new_width = int(self.font_size * char_count * 0.8)
         new_height = int(self.font_size * 2.0)
         self.root.geometry(f"{new_width}x{new_height}")
 
@@ -162,11 +168,15 @@ class BulletproofTimer:
         self.label.config(text=self.time_str)
         self.resize_window()
 
+    def start_timer_loop(self):
+        if self.after_id:
+            self.root.after_cancel(self.after_id)
+        self.update_timer()
+
     def update_timer(self):
         if self.running and self.remaining >= 0:
             self.update_display()
             self.remaining -= 1
-            # 루프 예약 후 ID 저장
             self.after_id = self.root.after(1000, self.update_timer)
         else:
             self.after_id = None
@@ -175,7 +185,7 @@ class BulletproofTimer:
         self.running = not self.running
         if self.running:
             self.pause_icon.place_forget()
-            self.start_timer_loop() # 재개 시 안전하게 루프 재시작
+            self.start_timer_loop()
         else:
             if self.after_id:
                 self.root.after_cancel(self.after_id)
@@ -184,5 +194,5 @@ class BulletproofTimer:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = BulletproofTimer(root)
+    app = PerfectBlueTimer(root)
     root.mainloop()
