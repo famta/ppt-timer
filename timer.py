@@ -2,14 +2,15 @@ import tkinter as tk
 from tkinter import simpledialog, colorchooser
 import sys
 
-class TextOnlyTimer:
+class UltimateTextTimer:
     def __init__(self, root):
         self.root = root
         
         # 1. 초기 설정값
         self.remaining = 600
         self.font_size = 60
-        self.font_color = "#FFFFFF" 
+        self.font_color_rgb = (255, 255, 255) # RGB 튜플 (흰색)
+        self.fg_alpha = 1.0    # [복구] 글자 투명도 (0.1 ~ 1.0)
         self.running = True
         self.time_str = "00:10:00"
 
@@ -20,91 +21,114 @@ class TextOnlyTimer:
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
         
-        # 배경을 특정 색으로 칠하고 그 색만 투명하게 뚫음
+        # 특정 색상을 투명하게 뚫음
         self.transparent_key = '#abcdef' 
         self.root.config(bg=self.transparent_key)
         self.root.wm_attributes("-transparentcolor", self.transparent_key)
 
-        # 3. 타이머 라벨
-        self.label = tk.Label(self.root, text="", font=("Helvetica", self.font_size, "bold"), 
-                              fg=self.font_color, bg=self.transparent_key, cursor="fleur")
-        self.label.pack(expand=True, fill='both')
+        # 3. 캔버스 (글자 투명도 조절 및 아이콘 표시를 위해 사용)
+        self.canvas = tk.Canvas(self.root, highlightthickness=0, bg=self.transparent_key)
+        self.canvas.pack(expand=True, fill='both')
 
         # 마우스 이벤트
-        self.label.bind("<ButtonPress-1>", self.start_move)
-        self.label.bind("<B1-Motion>", self.do_move)
-        self.label.bind("<Double-Button-1>", self.toggle_timer)
-        self.label.bind("<Button-3>", self.show_settings)
+        self.canvas.bind("<ButtonPress-1>", self.start_move)
+        self.canvas.bind("<B1-Motion>", self.do_move)
+        self.canvas.bind("<Double-Button-1>", self.toggle_timer)
+        self.canvas.bind("<Button-3>", self.show_settings)
 
         self.update_timer()
+        self.render_text()
+
+    def render_text(self):
+        """글자 투명도(T2)와 일시정지 아이콘을 포함하여 화면 갱신"""
+        # 글자 투명도 계산 (색상 합성 방식)
+        r = int(self.font_color_rgb[0] * self.fg_alpha)
+        g = int(self.font_color_rgb[1] * self.fg_alpha)
+        b = int(self.font_color_rgb[2] * self.fg_alpha)
+        hex_color = f'#{r:02x}{g:02x}{b:02x}'
+        
+        # 일시정지 시 앞에 || 표시 추가
+        display_text = self.time_str
+        if not self.running:
+            display_text = f"|| {self.time_str}"
+        
+        self.canvas.delete("all")
+        w = self.root.winfo_width()
+        h = self.root.winfo_height()
+        cx, cy = (w/2 if w > 1 else 150), (h/2 if h > 1 else 50)
+        
+        self.canvas.create_text(cx, cy, text=display_text, 
+                                font=("Helvetica", self.font_size, "bold"), 
+                                fill=hex_color)
 
     def show_settings(self, event):
-        """우클릭 시 설정창 노출"""
         if hasattr(self, 'settings') and self.settings.winfo_exists():
             self.settings.destroy()
 
         self.settings = tk.Toplevel(self.root)
         self.settings.overrideredirect(True)
-        # 마우스 커서 위치에 설정창 배치
         self.settings.geometry(f"+{event.x_root}+{event.y_root}")
         self.settings.attributes("-topmost", True)
         self.settings.config(bg="#222", padx=15, pady=15, highlightbackground="#444", highlightthickness=1)
         
-        # --- 설정 UI 구성 ---
+        # 헤더 및 닫기 버튼
         title_frame = tk.Frame(self.settings, bg="#222")
         title_frame.pack(fill="x", pady=(0, 10))
         tk.Label(title_frame, text="SETTINGS", bg="#222", fg="#aaa", font=("Arial", 8, "bold")).pack(side="left")
-        
-        # [X] 닫기 버튼 (명확하게 추가)
-        close_btn = tk.Button(title_frame, text="✕", command=self.settings.destroy, 
-                              bg="#222", fg="white", bd=0, cursor="hand2", activebackground="#444", activeforeground="red")
-        close_btn.pack(side="right")
+        tk.Button(title_frame, text="✕", command=self.settings.destroy, bg="#222", fg="white", bd=0).pack(side="right")
 
-        # 글자 크기 슬라이더
-        tk.Label(self.settings, text="Font Size", bg="#222", fg="white", font=("Arial", 9)).pack(anchor="w")
+        # 1. 글자 투명도 슬라이더 (복구 완료)
+        tk.Label(self.settings, text="글자 투명도 (T2)", bg="#222", fg="white", font=("Arial", 9)).pack(anchor="w")
+        fg_sc = tk.Scale(self.settings, from_=0.1, to=1.0, resolution=0.05, orient="horizontal",
+                         command=self.set_fg_alpha, bg="#222", fg="white", highlightthickness=0)
+        fg_sc.set(self.fg_alpha)
+        fg_sc.pack(fill="x", pady=(0, 10))
+
+        # 2. 글자 크기 슬라이더
+        tk.Label(self.settings, text="글자 크기", bg="#222", fg="white", font=("Arial", 9)).pack(anchor="w")
         sz_sc = tk.Scale(self.settings, from_=20, to=300, orient="horizontal",
-                         command=self.set_font_size, bg="#222", fg="white", highlightthickness=0, troughcolor="#444")
+                         command=self.set_font_size, bg="#222", fg="white", highlightthickness=0)
         sz_sc.set(self.font_size)
         sz_sc.pack(fill="x", pady=(0, 15))
 
         # 기능 버튼들
-        tk.Button(self.settings, text="🎨 Change Color", command=self.choose_color, bg="#444", fg="white", bd=0, pady=5).pack(fill="x", pady=2)
-        tk.Button(self.settings, text="⏱️ Set Time", command=self.ask_time, bg="#444", fg="white", bd=0, pady=5).pack(fill="x", pady=2)
-        
-        # 구분선
-        tk.Frame(self.settings, height=1, bg="#444").pack(fill="x", pady=10)
-        
-        # 프로그램 완전 종료 버튼
-        tk.Button(self.settings, text="EXIT PROGRAM", command=self.exit_app, bg="#d32f2f", fg="white", bd=0, pady=7, font=("Arial", 9, "bold")).pack(fill="x")
+        tk.Button(self.settings, text="🎨 글자 색상 변경", command=self.choose_color, bg="#444", fg="white", bd=0, pady=5).pack(fill="x", pady=2)
+        tk.Button(self.settings, text="⏱️ 시간 재설정", command=self.ask_time, bg="#444", fg="white", bd=0, pady=5).pack(fill="x", pady=2)
+        tk.Button(self.settings, text="❌ 프로그램 종료", command=self.exit_app, bg="#d32f2f", fg="white", bd=0, pady=7).pack(fill="x", pady=10)
 
-        # [중요] 포커스를 설정창으로 강제 이동시켜 바깥 클릭 시 잘 닫히게 함
         self.settings.focus_set()
         self.settings.bind("<FocusOut>", lambda e: self.settings.after(100, self.settings.destroy))
 
+    def set_fg_alpha(self, val):
+        self.fg_alpha = float(val)
+        self.render_text()
+
     def set_font_size(self, val):
         self.font_size = int(val)
-        self.label.config(font=("Helvetica", self.font_size, "bold"))
-
-    def choose_color(self):
-        color = colorchooser.askcolor(title="Select Color")[1]
-        if color:
-            self.font_color = color
-            self.label.config(fg=self.font_color)
-
-    def ask_time(self):
-        input_time = simpledialog.askstring("Timer", "Enter Time (HH:MM:SS)", initialvalue="00:10:00")
-        if input_time:
-            try:
-                h, m, s = map(int, input_time.split(':'))
-                self.remaining = h * 3600 + m * 60 + s
-                return True
-            except: return False
-        return False
+        self.root.geometry(f"{int(self.font_size*6)}x{int(self.font_size*1.8)}")
+        self.render_text()
 
     def exit_app(self):
         self.root.quit()
         self.root.destroy()
         sys.exit()
+
+    def choose_color(self):
+        color = colorchooser.askcolor(title="Select Color")[0]
+        if color:
+            self.font_color_rgb = color
+            self.render_text()
+
+    def ask_time(self):
+        input_time = simpledialog.askstring("Timer", "HH:MM:SS", initialvalue="00:10:00")
+        if input_time:
+            try:
+                h, m, s = map(int, input_time.split(':'))
+                self.remaining = h * 3600 + m * 60 + s
+                self.render_text()
+                return True
+            except: return False
+        return False
 
     def start_move(self, event):
         self.x, self.y = event.x, event.y
@@ -119,15 +143,16 @@ class TextOnlyTimer:
             h, rem = divmod(self.remaining, 3600)
             m, s = divmod(rem, 60)
             self.time_str = f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
-            self.label.config(text=self.time_str)
+            self.render_text()
             self.remaining -= 1
             self.root.after(1000, self.update_timer)
 
     def toggle_timer(self, event):
         self.running = not self.running
+        self.render_text() # 상태 변화 즉시 반영 (아이콘 표시)
         if self.running: self.update_timer()
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = TextOnlyTimer(root)
+    app = UltimateTextTimer(root)
     root.mainloop()
