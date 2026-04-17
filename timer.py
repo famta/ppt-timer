@@ -7,9 +7,9 @@ class ProfessionalTimer:
         
         # 설정 초기값
         self.remaining = 600
-        self.bg_opacity = 200  # 0(완전투명) ~ 255(불투명)
+        self.bg_color_hex = "#000000" # 기본 배경색 (검정)
         self.font_size = 45
-        self.font_color = "#FFFFFF"
+        self.font_color = "#FFFFFF"   # 기본 글자색 (흰색)
         self.running = True
 
         self.ask_time()
@@ -18,11 +18,13 @@ class ProfessionalTimer:
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
         
-        # 윈도우 투명도 속성 대신 특정 색상을 투명하게 처리 (Layered Window)
-        self.root.config(bg="#000001") # 아주 미세한 검은색
-        self.root.wm_attributes("-transparentcolor", "#000001")
+        # [핵심] 윈도우의 특정 색상을 투명하게 처리
+        # 이 색상이 배경색으로 지정되면 그 부분만 투명해집니다.
+        self.trans_key = "#000001" 
+        self.root.config(bg=self.trans_key)
+        self.root.wm_attributes("-transparentcolor", self.trans_key)
 
-        # 메인 라벨 (글자 농도/색상 유지)
+        # 타이머 라벨 (배경색 조절로 투명도 흉내)
         self.label = tk.Label(self.root, text="", font=("Helvetica", self.font_size, "bold"), 
                               fg=self.font_color, bg="black", cursor="fleur", padx=15, pady=10)
         self.label.pack()
@@ -34,13 +36,6 @@ class ProfessionalTimer:
         self.label.bind("<Button-3>", self.show_settings)
 
         self.update_timer()
-        self.update_bg_visibility()
-
-    def update_bg_visibility(self):
-        # 배경색의 농도를 16진수로 변환하여 적용
-        # 여기서는 레이블의 배경색 농도를 조절하여 글자와 분리합니다.
-        # 윈도우 시스템 특성상 완벽한 개별 투명도는 캔버스를 쓰거나 속성을 활용합니다.
-        self.root.attributes("-alpha", self.bg_opacity / 255)
 
     def show_settings(self, event):
         if hasattr(self, 'settings') and self.settings.winfo_exists():
@@ -50,37 +45,38 @@ class ProfessionalTimer:
         self.settings.overrideredirect(True)
         self.settings.geometry(f"+{event.x_root}+{event.y_root}")
         self.settings.attributes("-topmost", True)
-        self.settings.config(bg="#222", padx=10, pady=10)
+        self.settings.config(bg="#333", padx=12, pady=12)
         
-        # 1. 배경 투명도 (이제 글자에는 영향을 주지 않도록 설정)
-        tk.Label(self.settings, text="배경 투명도", bg="#222", fg="white", font=("Arial", 9)).pack()
-        bg_scale = tk.Scale(self.settings, from_=50, to=255, orient="horizontal",
-                            command=self.set_bg_opacity, bg="#222", fg="white", highlightthickness=0)
-        bg_scale.set(self.bg_opacity)
+        # 1. 배경 투명도 (전체 창의 투명도를 조절)
+        tk.Label(self.settings, text="배경 투명도 (글자 영향 없음)", bg="#333", fg="white", font=("Arial", 9)).pack()
+        bg_scale = tk.Scale(self.settings, from_=0.1, to=1.0, resolution=0.05, orient="horizontal",
+                            command=self.set_bg_opacity, bg="#333", fg="white", highlightthickness=0)
+        # 현재 창의 투명도 값을 가져와 설정
+        bg_scale.set(self.root.attributes("-alpha"))
         bg_scale.pack(fill="x", pady=(0, 10))
 
         # 2. 글자 크기
-        tk.Label(self.settings, text="글자 크기", bg="#222", fg="white", font=("Arial", 9)).pack()
+        tk.Label(self.settings, text="글자 크기 조절", bg="#333", fg="white", font=("Arial", 9)).pack()
         size_scale = tk.Scale(self.settings, from_=20, to=200, orient="horizontal",
-                              command=self.update_font_size, bg="#222", fg="white", highlightthickness=0)
+                              command=self.update_font_size, bg="#333", fg="white", highlightthickness=0)
         size_scale.set(self.font_size)
         size_scale.pack(fill="x", pady=(0, 10))
 
-        # 3. 버튼들
-        btn_frame = tk.Frame(self.settings, bg="#222")
+        # 3. 기능 버튼
+        btn_frame = tk.Frame(self.settings, bg="#333")
         btn_frame.pack(fill="x")
-        tk.Button(btn_frame, text="🎨 글자색", command=self.choose_color, bg="#444", fg="white", bd=0).pack(side="left", expand=True, fill="x", padx=2)
-        tk.Button(btn_frame, text="⏱️ 시간", command=self.ask_time, bg="#444", fg="white", bd=0).pack(side="left", expand=True, fill="x", padx=2)
+        tk.Button(btn_frame, text="🎨 색상", command=self.choose_color, bg="#555", fg="white", bd=0, padx=5).pack(side="left", expand=True, fill="x", padx=2)
+        tk.Button(btn_frame, text="⏱️ 시간", command=self.ask_time, bg="#555", fg="white", bd=0, padx=5).pack(side="left", expand=True, fill="x", padx=2)
         
-        tk.Button(self.settings, text="닫기 / 종료", command=self.root.destroy, bg="#d32f2f", fg="white", bd=0).pack(fill="x", pady=(10, 0))
+        tk.Button(self.settings, text="설정 닫기", command=self.settings.destroy, bg="#777", fg="white", bd=0).pack(fill="x", pady=(10, 0))
+        tk.Button(self.settings, text="프로그램 종료", command=self.root.destroy, bg="#d32f2f", fg="white", bd=0).pack(fill="x", pady=(5, 0))
 
+        # 설정창 바깥 클릭 시 자동 닫기
         self.settings.bind("<FocusOut>", lambda e: self.settings.destroy())
 
     def set_bg_opacity(self, val):
-        self.bg_opacity = int(val)
-        # 이 코드에서는 전체 투명도를 쓰되, 글자색을 아주 선명하게 유지하기 위해
-        # 폰트 색상을 더 강하게 보정하는 방식을 병행합니다.
-        self.root.attributes("-alpha", self.bg_opacity / 255)
+        # 배경 투명도를 조절해도 글자색(fg)은 Label 속성에 의해 선명하게 유지됩니다.
+        self.root.attributes("-alpha", float(val))
 
     def update_font_size(self, val):
         self.font_size = int(val)
@@ -115,6 +111,8 @@ class ProfessionalTimer:
             self.label.config(text=f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}")
             self.remaining -= 1
             self.root.after(1000, self.update_timer)
+        elif self.remaining < 0:
+            self.label.config(text="00:00", fg="red")
 
     def toggle_timer(self, event):
         self.running = not self.running
@@ -123,5 +121,6 @@ class ProfessionalTimer:
 if __name__ == "__main__":
     root = tk.Tk()
     root.withdraw()
+    # Toplevel을 사용하여 투명도 제어를 더 정교하게 만듦
     app = ProfessionalTimer(tk.Toplevel(root))
     root.mainloop()
