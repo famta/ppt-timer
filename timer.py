@@ -8,44 +8,54 @@ class UltimateTimer:
         
         # 1. 초기값 설정
         self.remaining = 600
+        self.bg_alpha = 0.8    # 배경(창 전체) 투명도 (0.1 ~ 1.0)
+        self.fg_alpha = 1.0    # 글자 투명도 (0.1 ~ 1.0)
         self.font_size = 50
-        self.font_color = "#FFFFFF" 
-        self.bg_opacity = 180       
+        self.font_rgb = (255, 255, 255) # 기본 흰색
         self.running = True
 
-        # 시간 설정 (취소 시 프로그램 종료 방지 로직 포함)
         if not self.ask_time():
             self.remaining = 600 
 
-        # 2. 윈도우 설정 (Toplevel 대신 root 직접 제어)
+        # 2. 윈도우 설정
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
-        
-        # 윈도우 특정 색상 투명화 (Windows 전용)
-        self.trans_key = "#000001"
-        self.root.wm_attributes("-transparentcolor", self.trans_key)
+        self.root.config(bg="black") # 기본 배경색 고정
 
-        # 3. 타이머 라벨 (배경 농도와 글자 선명도 분리)
-        self.label = tk.Label(self.root, text="", font=("Helvetica", self.font_size, "bold"), 
-                              fg=self.font_color, bg="black", cursor="fleur", padx=15, pady=10)
-        self.label.pack()
+        # 3. 캔버스 사용 (글자 투명도 시뮬레이션을 위해 필수)
+        self.canvas = tk.Canvas(self.root, highlightthickness=0, bg="black")
+        self.canvas.pack(fill="both", expand=True)
 
         # 이벤트 바인딩
-        self.label.bind("<ButtonPress-1>", self.start_move)
-        self.label.bind("<B1-Motion>", self.do_move)
-        self.label.bind("<Double-Button-1>", self.toggle_timer)
-        self.label.bind("<Button-3>", self.show_settings)
-
-        # 프로그램 종료 시 완전히 프로세스를 죽이도록 설정
-        self.root.protocol("WM_DELETE_WINDOW", self.exit_program)
+        self.canvas.bind("<ButtonPress-1>", self.start_move)
+        self.canvas.bind("<B1-Motion>", self.do_move)
+        self.canvas.bind("<Double-Button-1>", self.toggle_timer)
+        self.canvas.bind("<Button-3>", self.show_settings)
 
         self.update_timer()
-        self.apply_bg_opacity()
+        self.refresh_display()
 
-    def apply_bg_opacity(self):
-        """글자 선명도는 유지하고 배경 농도만 조절"""
-        opacity_hex = f'#{self.bg_opacity:02x}{self.bg_opacity:02x}{self.bg_opacity:02x}'
-        self.label.config(bg=opacity_hex)
+    def refresh_display(self):
+        """배경과 글자 투명도를 각각 계산하여 렌더링"""
+        # [A] 배경 투명도 적용 (윈도우 전체 투명도)
+        self.root.attributes("-alpha", self.bg_alpha)
+        
+        # [B] 글자 투명도 적용 (배경색인 검정색과 RGB를 합성)
+        r = int(self.font_rgb[0] * self.fg_alpha)
+        g = int(self.font_rgb[1] * self.fg_alpha)
+        b = int(self.font_rgb[2] * self.fg_alpha)
+        hex_color = f'#{r:02x}{g:02x}{b:02x}'
+        
+        self.canvas.delete("all")
+        w = self.root.winfo_width()
+        h = self.root.winfo_height()
+        # 중앙 정렬 (초기 실행 시 winfo값이 1이므로 대비책 마련)
+        cx = w/2 if w > 1 else 100
+        cy = h/2 if h > 1 else 40
+        
+        self.canvas.create_text(cx, cy, text=self.time_str, 
+                                font=("Helvetica", self.font_size, "bold"), 
+                                fill=hex_color)
 
     def show_settings(self, event):
         if hasattr(self, 'settings') and self.settings.winfo_exists():
@@ -55,52 +65,63 @@ class UltimateTimer:
         self.settings.overrideredirect(True)
         self.settings.geometry(f"+{event.x_root}+{event.y_root}")
         self.settings.attributes("-topmost", True)
-        self.settings.config(bg="#333", padx=12, pady=12)
+        self.settings.config(bg="#333", padx=15, pady=15)
         
-        # 배경 농도 슬라이더
-        tk.Label(self.settings, text="배경 농도 (0~255)", bg="#333", fg="white", font=("Arial", 9)).pack()
-        bg_scale = tk.Scale(self.settings, from_=0, to=255, orient="horizontal",
-                            command=self.update_bg_opacity, bg="#333", fg="white", highlightthickness=0)
-        bg_scale.set(self.bg_opacity)
-        bg_scale.pack(fill="x", pady=(0, 10))
+        # 슬라이더 1: 배경 투명도 (T1)
+        tk.Label(self.settings, text="배경 투명도 (뒤쪽 비침)", bg="#333", fg="white", font=("Arial", 9)).pack(anchor="w")
+        bg_sc = tk.Scale(self.settings, from_=0.1, to=1.0, resolution=0.05, orient="horizontal",
+                         command=self.set_bg_alpha, bg="#333", fg="white", highlightthickness=0)
+        bg_sc.set(self.bg_alpha)
+        bg_sc.pack(fill="x", pady=(0, 10))
 
-        # 글자 크기 슬라이더
-        tk.Label(self.settings, text="글자 크기", bg="#333", fg="white", font=("Arial", 9)).pack()
-        size_scale = tk.Scale(self.settings, from_=20, to=200, orient="horizontal",
-                              command=self.update_font_size, bg="#333", fg="white", highlightthickness=0)
-        size_scale.set(self.font_size)
-        size_scale.pack(fill="x", pady=(0, 10))
+        # 슬라이더 2: 글자 투명도 (T2)
+        tk.Label(self.settings, text="글자 투명도 (글자만 투명하게)", bg="#333", fg="white", font=("Arial", 9)).pack(anchor="w")
+        fg_sc = tk.Scale(self.settings, from_=0.1, to=1.0, resolution=0.05, orient="horizontal",
+                         command=self.set_fg_alpha, bg="#333", fg="white", highlightthickness=0)
+        fg_sc.set(self.fg_alpha)
+        fg_sc.pack(fill="x", pady=(0, 10))
 
-        # 기능 버튼
-        btn_frame = tk.Frame(self.settings, bg="#333")
-        btn_frame.pack(fill="x")
-        tk.Button(btn_frame, text="🎨 색상", command=self.choose_color, bg="#555", fg="white", bd=0, padx=5).pack(side="left", expand=True, fill="x", padx=2)
-        tk.Button(btn_frame, text="⏱️ 시간", command=self.ask_time, bg="#555", fg="white", bd=0, padx=5).pack(side="left", expand=True, fill="x", padx=2)
+        # 슬라이더 3: 글자 크기
+        tk.Label(self.settings, text="글자 크기", bg="#333", fg="white", font=("Arial", 9)).pack(anchor="w")
+        sz_sc = tk.Scale(self.settings, from_=20, to=200, orient="horizontal",
+                         command=self.set_font_size, bg="#333", fg="white", highlightthickness=0)
+        sz_sc.set(self.font_size)
+        sz_sc.pack(fill="x", pady=(0, 10))
+
+        # 버튼들
+        btn_f = tk.Frame(self.settings, bg="#333")
+        btn_f.pack(fill="x", pady=5)
+        tk.Button(btn_f, text="🎨 색상", command=self.choose_color, bg="#555", fg="white", bd=0).pack(side="left", expand=True, fill="x", padx=2)
+        tk.Button(btn_f, text="⏱️ 시간", command=self.ask_time, bg="#555", fg="white", bd=0).pack(side="left", expand=True, fill="x", padx=2)
         
-        tk.Button(self.settings, text="설정창 닫기", command=self.settings.destroy, bg="#777", fg="white", bd=0).pack(fill="x", pady=(10, 0))
-        tk.Button(self.settings, text="프로그램 종료", command=self.exit_program, bg="red", fg="white", bd=0).pack(fill="x", pady=(5, 0))
+        tk.Button(self.settings, text="설정 닫기", command=self.settings.destroy, bg="#777", fg="white", bd=0).pack(fill="x", pady=2)
+        tk.Button(self.settings, text="프로그램 종료", command=self.exit_program, bg="red", fg="white", bd=0).pack(fill="x", pady=5)
 
         self.settings.bind("<FocusOut>", lambda e: self.settings.destroy())
 
+    def set_bg_alpha(self, val):
+        self.bg_alpha = float(val)
+        self.refresh_display()
+
+    def set_fg_alpha(self, val):
+        self.fg_alpha = float(val)
+        self.refresh_display()
+
+    def set_font_size(self, val):
+        self.font_size = int(val)
+        self.root.geometry(f"{int(self.font_size*4.5)}x{int(self.font_size*1.8)}")
+        self.refresh_display()
+
     def exit_program(self):
-        """프로세스까지 완전히 종료"""
         self.root.quit()
         self.root.destroy()
         sys.exit()
 
-    def update_bg_opacity(self, val):
-        self.bg_opacity = int(val)
-        self.apply_bg_opacity()
-
-    def update_font_size(self, val):
-        self.font_size = int(val)
-        self.label.config(font=("Helvetica", self.font_size, "bold"))
-
     def choose_color(self):
-        color = colorchooser.askcolor(title="글자 색상 선택", color=self.font_color)[1]
+        color = colorchooser.askcolor(title="글자 색상 선택")[0] # RGB 튜플
         if color:
-            self.font_color = color
-            self.label.config(fg=self.font_color)
+            self.font_rgb = color
+            self.refresh_display()
 
     def ask_time(self):
         input_time = simpledialog.askstring("시간 설정", "HH:MM:SS", initialvalue="00:10:00")
@@ -124,7 +145,8 @@ class UltimateTimer:
         if self.running and self.remaining >= 0:
             h, rem = divmod(self.remaining, 3600)
             m, s = divmod(rem, 60)
-            self.label.config(text=f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}")
+            self.time_str = f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
+            self.refresh_display()
             self.remaining -= 1
             self.root.after(1000, self.update_timer)
 
@@ -134,6 +156,5 @@ class UltimateTimer:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    # root.withdraw() 제거 (백그라운드 잔류 원인)
     app = UltimateTimer(root)
     root.mainloop()
