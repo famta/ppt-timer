@@ -2,15 +2,16 @@ import tkinter as tk
 from tkinter import simpledialog, colorchooser
 import sys
 
-class ResetEnabledTimer:
+class BulletproofTimer:
     def __init__(self, root):
         self.root = root
         
-        # 1. 초기 데이터 설정
-        self.initial_seconds = 600  # 초기화 시 돌아갈 시간 (기본 10분)
+        # 1. 제어 변수
+        self.after_id = None  # 중복 실행 방지용 핵심 추적기
+        self.initial_seconds = 600 
         self.remaining = 600
         self.font_size = 60
-        self.font_color = "#0000FF" # 기본 Blue
+        self.font_color = "#0000FF" 
         self.fg_alpha = 1.0
         self.running = True
         self.time_str = "00:10:00"
@@ -28,7 +29,6 @@ class ResetEnabledTimer:
         self.root.config(bg=self.transparent_key)
         self.root.wm_attributes("-transparentcolor", self.transparent_key)
         
-        # 작업 표시줄 아이콘 표시
         self.root.after(10, lambda: self.set_appwindow(self.root))
 
         # 3. 레이아웃
@@ -49,7 +49,7 @@ class ResetEnabledTimer:
             w.bind("<Double-Button-1>", self.toggle_timer)
             w.bind("<Button-3>", self.show_settings)
 
-        self.update_timer()
+        self.start_timer_loop() # 최초 실행
         self.apply_alpha()
         self.resize_window()
 
@@ -80,28 +80,29 @@ class ResetEnabledTimer:
         tk.Label(header, text="TIMER SETTINGS", bg="#1a1a1a", fg="white", font=("Arial", 9, "bold")).pack(side="left")
         tk.Button(header, text="✕", command=self.settings.destroy, bg="#1a1a1a", fg="white", bd=0, padx=5).pack(side="right")
 
-        # 투명도 조절
-        tk.Label(self.settings, text="글자 투명도", bg="#1a1a1a", fg="#aaa").pack(anchor="w")
-        tk.Scale(self.settings, from_=0.1, to=1.0, resolution=0.05, orient="horizontal",
+        tk.Scale(self.settings, from_=0.1, to=1.0, resolution=0.05, orient="horizontal", label="투명도",
                  command=self.set_fg_alpha, bg="#1a1a1a", fg="white", highlightthickness=0).set(self.fg_alpha)
 
-        # 크기 조절
-        tk.Label(self.settings, text="글자 크기", bg="#1a1a1a", fg="#aaa").pack(anchor="w", pady=(10, 0))
-        tk.Scale(self.settings, from_=20, to=300, orient="horizontal",
+        tk.Scale(self.settings, from_=20, to=300, orient="horizontal", label="크기",
                  command=self.set_font_size, bg="#1a1a1a", fg="white", highlightthickness=0).set(self.font_size)
 
-        # [추가] 시간 초기화 버튼
         tk.Button(self.settings, text="🔄 시간 초기화 (Reset)", command=self.reset_timer, bg="#0056b3", fg="white", bd=0, pady=8).pack(fill="x", pady=(15, 2))
-        
-        # 기능 버튼
         tk.Button(self.settings, text="🎨 색상 변경", command=self.choose_color, bg="#333", fg="white", bd=0, pady=5).pack(fill="x", pady=2)
         tk.Button(self.settings, text="⏱️ 시간 재설정", command=self.ask_time, bg="#333", fg="white", bd=0, pady=5).pack(fill="x", pady=2)
         tk.Button(self.settings, text="🛑 프로그램 종료", command=self.exit_app, bg="#8b0000", fg="white", bd=0, pady=7).pack(fill="x", pady=(10, 0))
 
+    def start_timer_loop(self):
+        """기존 루프를 취소하고 새로 시작하여 중복 실행을 원천 차단"""
+        if self.after_id:
+            self.root.after_cancel(self.after_id)
+        self.update_timer()
+
     def reset_timer(self):
-        """저장된 초기 시간으로 되돌림"""
         self.remaining = self.initial_seconds
         self.update_display()
+        # 일시정지 상태라면 다시 시작하지 않음
+        if self.running:
+            self.start_timer_loop()
         if hasattr(self, 'settings'):
             self.settings.destroy()
 
@@ -116,12 +117,10 @@ class ResetEnabledTimer:
         self.resize_window()
 
     def resize_window(self):
-        """잘림 방지 로직 강화"""
         text = self.label.cget("text")
         char_count = len(text)
-        # 폰트 너비는 높이의 약 0.7~0.8배 (볼드체 기준)
-        new_width = int(self.font_size * char_count * 0.75)
-        new_height = int(self.font_size * 1.8)
+        new_width = int(self.font_size * char_count * 0.8) # 넉넉하게 0.8
+        new_height = int(self.font_size * 2.0)
         self.root.geometry(f"{new_width}x{new_height}")
 
     def choose_color(self):
@@ -139,11 +138,13 @@ class ResetEnabledTimer:
                     self.remaining = parts[0] * 3600 + parts[1] * 60 + parts[2]
                 elif len(parts) == 2:
                     self.remaining = parts[0] * 60 + parts[1]
-                self.initial_seconds = self.remaining # 초기값으로 저장
+                self.initial_seconds = self.remaining
                 self.update_display()
+                if self.running: self.start_timer_loop()
             except: pass
 
     def exit_app(self):
+        if self.after_id: self.root.after_cancel(self.after_id)
         self.root.quit()
         self.root.destroy()
         sys.exit()
@@ -165,17 +166,23 @@ class ResetEnabledTimer:
         if self.running and self.remaining >= 0:
             self.update_display()
             self.remaining -= 1
-            self.root.after(1000, self.update_timer)
+            # 루프 예약 후 ID 저장
+            self.after_id = self.root.after(1000, self.update_timer)
+        else:
+            self.after_id = None
 
     def toggle_timer(self, event):
         self.running = not self.running
         if self.running:
             self.pause_icon.place_forget()
-            self.update_timer()
+            self.start_timer_loop() # 재개 시 안전하게 루프 재시작
         else:
+            if self.after_id:
+                self.root.after_cancel(self.after_id)
+                self.after_id = None
             self.pause_icon.place(relx=0.5, rely=0.5, anchor="center")
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = ResetEnabledTimer(root)
+    app = BulletproofTimer(root)
     root.mainloop()
