@@ -9,29 +9,28 @@ class TextOnlyTimer:
         # 1. 초기 설정값
         self.remaining = 600
         self.font_size = 60
-        self.font_color = "#FFFFFF" # 기본 흰색 (제일 잘 보임)
+        self.font_color = "#FFFFFF" 
         self.running = True
         self.time_str = "00:10:00"
 
         if not self.ask_time():
             self.remaining = 600 
 
-        # 2. 윈도우 설정 (배경을 완전히 날려버리는 핵심 설정)
+        # 2. 윈도우 설정 (배경 완전 투명화)
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
         
-        # [핵심] 특정 색상을 투명 구멍으로 만듭니다.
-        # 배경색을 '초록색(system)'으로 잡고, 그 색을 투명하게 뚫어버립니다.
-        self.transparent_color = '#abcdef' 
-        self.root.config(bg=self.transparent_color)
-        self.root.wm_attributes("-transparentcolor", self.transparent_color)
+        # 배경을 특정 색으로 칠하고 그 색만 투명하게 뚫음
+        self.transparent_key = '#abcdef' 
+        self.root.config(bg=self.transparent_key)
+        self.root.wm_attributes("-transparentcolor", self.transparent_key)
 
-        # 3. 타이머 라벨 (배경색을 위에서 지정한 투명색으로 설정)
+        # 3. 타이머 라벨
         self.label = tk.Label(self.root, text="", font=("Helvetica", self.font_size, "bold"), 
-                              fg=self.font_color, bg=self.transparent_color, cursor="fleur")
+                              fg=self.font_color, bg=self.transparent_key, cursor="fleur")
         self.label.pack(expand=True, fill='both')
 
-        # 마우스 이벤트 (글자를 잡고 드래그하면 이동 가능)
+        # 마우스 이벤트
         self.label.bind("<ButtonPress-1>", self.start_move)
         self.label.bind("<B1-Motion>", self.do_move)
         self.label.bind("<Double-Button-1>", self.toggle_timer)
@@ -40,42 +39,60 @@ class TextOnlyTimer:
         self.update_timer()
 
     def show_settings(self, event):
-        """우클릭 시 나오는 간단 설정창"""
+        """우클릭 시 설정창 노출"""
         if hasattr(self, 'settings') and self.settings.winfo_exists():
             self.settings.destroy()
 
         self.settings = tk.Toplevel(self.root)
         self.settings.overrideredirect(True)
+        # 마우스 커서 위치에 설정창 배치
         self.settings.geometry(f"+{event.x_root}+{event.y_root}")
         self.settings.attributes("-topmost", True)
-        self.settings.config(bg="#333", padx=10, pady=10)
+        self.settings.config(bg="#222", padx=15, pady=15, highlightbackground="#444", highlightthickness=1)
         
-        # 글자 크기 조절
-        tk.Label(self.settings, text="글자 크기", bg="#333", fg="white").pack()
+        # --- 설정 UI 구성 ---
+        title_frame = tk.Frame(self.settings, bg="#222")
+        title_frame.pack(fill="x", pady=(0, 10))
+        tk.Label(title_frame, text="SETTINGS", bg="#222", fg="#aaa", font=("Arial", 8, "bold")).pack(side="left")
+        
+        # [X] 닫기 버튼 (명확하게 추가)
+        close_btn = tk.Button(title_frame, text="✕", command=self.settings.destroy, 
+                              bg="#222", fg="white", bd=0, cursor="hand2", activebackground="#444", activeforeground="red")
+        close_btn.pack(side="right")
+
+        # 글자 크기 슬라이더
+        tk.Label(self.settings, text="Font Size", bg="#222", fg="white", font=("Arial", 9)).pack(anchor="w")
         sz_sc = tk.Scale(self.settings, from_=20, to=300, orient="horizontal",
-                         command=self.set_font_size, bg="#333", fg="white", highlightthickness=0)
+                         command=self.set_font_size, bg="#222", fg="white", highlightthickness=0, troughcolor="#444")
         sz_sc.set(self.font_size)
-        sz_sc.pack(fill="x", pady=5)
+        sz_sc.pack(fill="x", pady=(0, 15))
 
-        # 버튼들
-        tk.Button(self.settings, text="🎨 글자색 변경", command=self.choose_color, bg="#555", fg="white", bd=0).pack(fill="x", pady=2)
-        tk.Button(self.settings, text="⏱️ 시간 설정", command=self.ask_time, bg="#555", fg="white", bd=0).pack(fill="x", pady=2)
-        tk.Button(self.settings, text="❌ 프로그램 종료", command=self.exit_app, bg="red", fg="white", bd=0).pack(fill="x", pady=5)
+        # 기능 버튼들
+        tk.Button(self.settings, text="🎨 Change Color", command=self.choose_color, bg="#444", fg="white", bd=0, pady=5).pack(fill="x", pady=2)
+        tk.Button(self.settings, text="⏱️ Set Time", command=self.ask_time, bg="#444", fg="white", bd=0, pady=5).pack(fill="x", pady=2)
+        
+        # 구분선
+        tk.Frame(self.settings, height=1, bg="#444").pack(fill="x", pady=10)
+        
+        # 프로그램 완전 종료 버튼
+        tk.Button(self.settings, text="EXIT PROGRAM", command=self.exit_app, bg="#d32f2f", fg="white", bd=0, pady=7, font=("Arial", 9, "bold")).pack(fill="x")
 
-        self.settings.bind("<FocusOut>", lambda e: self.settings.destroy())
+        # [중요] 포커스를 설정창으로 강제 이동시켜 바깥 클릭 시 잘 닫히게 함
+        self.settings.focus_set()
+        self.settings.bind("<FocusOut>", lambda e: self.settings.after(100, self.settings.destroy))
 
     def set_font_size(self, val):
         self.font_size = int(val)
         self.label.config(font=("Helvetica", self.font_size, "bold"))
 
     def choose_color(self):
-        color = colorchooser.askcolor(title="글자 색상")[1]
+        color = colorchooser.askcolor(title="Select Color")[1]
         if color:
             self.font_color = color
             self.label.config(fg=self.font_color)
 
     def ask_time(self):
-        input_time = simpledialog.askstring("시간", "HH:MM:SS", initialvalue="00:10:00")
+        input_time = simpledialog.askstring("Timer", "Enter Time (HH:MM:SS)", initialvalue="00:10:00")
         if input_time:
             try:
                 h, m, s = map(int, input_time.split(':'))
