@@ -1,9 +1,3 @@
-# 1. 빌드 도구 설치
-!pip install pyinstaller
-
-# 2. 파이썬 코드 파일 만들기 (앞서 드린 타이머 코드)
-with open('timer.py', 'w') as f:
-    f.write('''
 import tkinter as tk
 from tkinter import messagebox
 
@@ -61,9 +55,3 @@ if __name__ == "__main__":
     root = tk.Tk()
     timer = PresentationTimer(root)
     root.mainloop()
-''')
-
-# 3. EXE 파일로 빌드 (Windows용 실행 파일 생성)
-# 주의: Colab은 리눅스 환경이므로 기본적으로는 리눅스 실행파일이 나옵니다.
-# 윈도우용 EXE가 필요하시다면 아래 '중요 참고'를 확인해주세요.
-!pyinstaller --onefile --noconsole timer.py
